@@ -17,6 +17,12 @@
       max-width: 100%;
       margin: 10px auto;
     }
+    #webcam-container canvas {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+    }
     video {
       max-width: 100%;
       height: auto;
@@ -24,6 +30,16 @@
     #label-container {
       margin: 10px;
       font-size: 1.2em;
+    }
+    #label-container div {
+      margin: 5px;
+      padding: 5px;
+      background-color: #f0f0f0;
+      border-radius: 5px;
+      text-align: left;
+      max-width: 90%;
+      margin-left: auto;
+      margin-right: auto;
     }
     button {
       padding: 10px 20px;
@@ -44,23 +60,31 @@
     const URL = "https://teachablemachine.withgoogle.com/models/BIbJVnndE/";
     let model, webcam, labelContainer, maxPredictions;
     let mqttClient;
+    let messageQueue = []; // Queue for MQTT messages when disconnected
+    let lastFrameTime = 0;
+    const frameInterval = 100; // Limit to ~10 FPS (100ms interval)
 
     // MQTT Configuration
     const mqttBroker = 'broker.hivemq.com';
-    const mqttPort = 8000;
-    const mqttTopic = 'Rat';
+    const mqttPort = 8884; // Secure WebSocket port
+    const mqttTopic = `Rat/${clientId}`; // Unique topic to avoid collisions
     const clientId = 'clientId-buiKVcO8tx' + Math.random().toString(16).slice(3);
 
-    function connectMQTT() {
+    function connectMQTT(attempt = 1, maxAttempts = 3) {
       mqttClient = new Paho.MQTT.Client(mqttBroker, mqttPort, clientId);
       mqttClient.onConnectionLost = onConnectionLost;
       mqttClient.onMessageArrived = onMessageArrived;
 
       mqttClient.connect({
+        useSSL: true, // Use secure WebSocket
         onSuccess: onConnect,
         onFailure: (err) => {
           console.error('MQTT connection failed:', err);
-          document.getElementById("label-container").innerText = "MQTT Connection Failed: " + err.errorMessage;
+          document.getElementById("label-container").innerText = `MQTT Connection Failed: ${err.errorMessage}`;
+          if (attempt < maxAttempts) {
+            console.log(`Retrying MQTT connection (${attempt + 1}/${maxAttempts})...`);
+            setTimeout(() => connectMQTT(attempt + 1, maxAttempts), 2000);
+          }
         }
       });
     }
@@ -68,12 +92,18 @@
     function onConnect() {
       console.log('Connected to MQTT broker');
       document.getElementById("label-container").innerText = "Connected to MQTT broker";
+      // Send queued messages
+      while (messageQueue.length > 0) {
+        const message = messageQueue.shift();
+        mqttClient.send(message);
+        console.log('Sent queued MQTT message:', message.payloadString);
+      }
     }
 
     function onConnectionLost(responseObject) {
       if (responseObject.errorCode !== 0) {
         console.error('MQTT connection lost:', responseObject.errorMessage);
-        document.getElementById("label-container").innerText = "MQTT Connection Lost: " + responseObject.errorMessage;
+        document.getElementById("label-container").innerText = `MQTT Connection Lost: ${responseObject.errorMessage}`;
       }
     }
 
@@ -82,16 +112,33 @@
     }
 
     async function init(facingMode) {
+      // Check for getUserMedia support
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        document.getElementById("label-container").innerText = "Error: Webcam not supported by this browser";
+        return;
+      }
+
+      document.getElementById("label-container").innerText = "Loading model and webcam...";
+
       const modelURL = URL + "model.json";
       const metadataURL = URL + "metadata.json";
 
       // Connect to MQTT
       connectMQTT();
 
-      model = await tmImage.load(modelURL, metadataURL);
-      maxPredictions = model.getTotalClasses();
+      // Load the model
+      try {
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+      } catch (e) {
+        console.error("Model loading failed:", e);
+        document.getElementById("label-container").innerText = "Error: Failed to load the model. Please check the model URL.";
+        return;
+      }
 
-      webcam = new tmImage.Webcam(224, 224, false);
+      // Initialize webcam with high-DPI support
+      const scale = window.devicePixelRatio || 1;
+      webcam = new tmImage.Webcam(224 * scale, 224 * scale, false);
       try {
         await webcam.setup({ facingMode: facingMode });
         await webcam.play();
@@ -99,10 +146,18 @@
           throw new Error("Webcam canvas is not initialized");
         }
         console.log("Webcam initialized, width:", webcam.canvas.width, "facingMode:", facingMode);
+        webcam.canvas.style.width = "224px";
+        webcam.canvas.style.height = "224px";
         window.requestAnimationFrame(loop);
       } catch (e) {
         console.error("Webcam setup failed:", e);
-        document.getElementById("label-container").innerText = "Error: " + e.message;
+        let errorMessage = e.message;
+        if (e.name === "NotAllowedError") {
+          errorMessage = "Camera access denied. Please allow camera permissions.";
+        } else if (e.name === "NotFoundError") {
+          errorMessage = "No camera found. Please ensure a camera is available.";
+        }
+        document.getElementById("label-container").innerText = `Error: ${errorMessage}`;
         return;
       }
 
@@ -114,7 +169,12 @@
       }
     }
 
-    async function loop() {
+    async function loop(timestamp) {
+      if (timestamp - lastFrameTime < frameInterval) {
+        window.requestAnimationFrame(loop);
+        return;
+      }
+      lastFrameTime = timestamp;
       webcam.update();
       await predict();
       window.requestAnimationFrame(loop);
@@ -132,12 +192,15 @@
         });
       }
 
-      // Send predictions to MQTT
+      // Send or queue predictions
+      const message = new Paho.MQTT.Message(JSON.stringify(predictionData));
+      message.destinationName = mqttTopic;
       if (mqttClient && mqttClient.isConnected()) {
-        const message = new Paho.MQTT.Message(JSON.stringify(predictionData));
-        message.destinationName = mqttTopic;
         mqttClient.send(message);
         console.log('Sent MQTT message:', JSON.stringify(predictionData));
+      } else {
+        messageQueue.push(message);
+        console.log('Queued MQTT message:', JSON.stringify(predictionData));
       }
     }
 
@@ -146,13 +209,15 @@
         webcam.stop();
         document.getElementById("webcam-container").innerHTML = '';
         document.getElementById("label-container").innerHTML = '';
+        webcam = null;
       }
       if (mqttClient && mqttClient.isConnected()) {
         mqttClient.disconnect();
         console.log('Disconnected from MQTT broker');
+        mqttClient = null;
       }
+      messageQueue = []; // Clear message queue
     }
   </script>
 </body>
 </html>
-
