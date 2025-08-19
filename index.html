@@ -8,12 +8,18 @@
   async function init(facingMode) {
     if (isRunning) {
       console.log("Already running, please stop first.");
-      labelContainer.innerText = "Already running, please stop first.";
       return;
     }
     isRunning = true;
 
+    // Initialize labelContainer and validate
     labelContainer = document.getElementById("label-container");
+    if (!labelContainer) {
+      console.error("Error: Element with id 'label-container' not found in the DOM.");
+      alert("Error: 'label-container' element not found. Please check your HTML.");
+      isRunning = false;
+      return;
+    }
     labelContainer.innerText = "Initializing...";
     console.log("Initializing with facingMode:", facingMode);
 
@@ -54,110 +60,6 @@
       console.log("Webcam initialized, width:", webcam.canvas.width, "facingMode:", facingMode);
       webcam.canvas.style.width = "224px";
       webcam.canvas.style.height = "224px";
-      document.getElementById("webcam-container").appendChild(webcam.canvas);
-    } catch (e) {
-      console.error("Webcam setup failed:", e);
-      let errorMessage = e.message;
-      if (e.name === "NotAllowedError") {
-        errorMessage = "Camera access denied. Please allow camera permissions.";
-      } else if (e.name === "NotFoundError") {
-        errorMessage = "No camera found. Please ensure a camera is available.";
-      } else if (e.message.includes("Requested device not found")) {
-        errorMessage = "Requested camera not found. Try switching to another camera.";
-      }
-      labelContainer.innerText = `Error: ${errorMessage}`;
-      isRunning = false;
-      return;
-    }
-
-    // Set up label container
-    try {
-      labelContainer.innerHTML = "";
-      console.log("Creating", maxPredictions, "prediction divs");
-      for (let i = 0; i < maxPredictions; i++) {
-        const div = document.createElement("div");
-        div.id = `prediction-${i}`;
-        div.innerText = `Class ${i}: Initializing...`;
-        labelContainer.appendChild(div);
-      }
-      console.log("Label container initialized with", labelContainer.children.length, "divs");
-    } catch (e) {
-      console.error("Label container setup failed:", e);
-      labelContainer.innerText = `Error: Failed to set up label container.`;
-      isRunning = false;
-      return;
-    }
-
-    // Start prediction loop
-    labelContainer.innerText = "Starting predictions...";
-    console.log("Starting prediction loop");
-    window.requestAnimationFrame(loop);
-  }
-
-  async function loop(timestamp) {
-    if (!isRunning || !webcam) {
-      console.log("Loop stopped: isRunning=", isRunning, "webcam=", !!webcam);
-      return;
-    }
-    if (timestamp - lastFrameTime < frameInterval) {
-      window.requestAnimationFrame(loop);
-      return;
-    }
-    lastFrameTime = timestamp;
-    try {
-      await webcam.update();
-      await predict();
-    } catch (e) {
-      console.error("Loop error:", e);
-      labelContainer.innerText = `Error during prediction loop: ${e.message}`;
-    }
-    window.requestAnimationFrame(loop);
-  }
-
-  async function predict() {
-    if (!isRunning || !model || !webcam || !labelContainer) {
-      console.warn("Prediction skipped: System not fully initialized");
-      return;
-    }
-
-    try {
-      const prediction = await model.predict(webcam.canvas);
-      console.log("Prediction received:", prediction);
-
-      // Ensure children exist
-      if (labelContainer.children.length !== maxPredictions) {
-        console.error("Label container has incorrect number of children:", labelContainer.children.length, "expected:", maxPredictions);
-        labelContainer.innerText = "Error: Label container not properly initialized.";
-        isRunning = false;
-        return;
-      }
-
-      for (let i = 0; i < maxPredictions; i++) {
-        const div = labelContainer.children[i];
-        if (!div) {
-          console.error(`Prediction div ${i} is missing`);
-          continue;
-        }
-        const classPrediction = `${prediction[i].className}: ${prediction[i].probability.toFixed(2)}`;
-        div.innerHTML = classPrediction;
-        console.log(`Updated div ${i}: ${classPrediction}`);
-      }
-    } catch (e) {
-      console.error("Prediction failed:", e);
-      labelContainer.innerText = `Error in prediction: ${e.message}`;
-    }
-  }
-
-  function stop() {
-    isRunning = false;
-    if (webcam) {
-      webcam.stop();
-      document.getElementById("webcam-container").innerHTML = '';
-      webcam = null;
-    }
-    if (labelContainer) {
-      labelContainer.innerText = "Stopped.";
-    }
-    console.log("Stopped execution");
-  }
-</script>
+      const webcamContainer = document.getElementById("webcam-container");
+      if (!webcamContainer) {
+        throw new Error("Webcam container element not found");
