@@ -1,249 +1,229 @@
-html<!DOCTYPE html>
-<html>
-<head>
-  <title>Teachable Machine Image Model (Mobile) with MQTT</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 0;
-    }
-    #webcam-container {
-      max-width: 100%;
-      margin: 10px auto;
-    }
-    #webcam-container canvas {
-      max-width: 100%;
-      height: auto;
-      display: block;
-      margin: 0 auto;
-    }
-    video {
-      max-width: 100%;
-      height: auto;
-    }
-    #label-container {
-      margin: 10px;
-      font-size: 1.2em;
-    }
-    #label-container div {
-      margin: 5px;
-      padding: 5px;
-      background-color: #f0f0f0;
-      border-radius: 5px;
-      text-align: left;
-      max-width: 90%;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 1em;
-      margin: 5px;
-    }
-  </style>
-</head>
-<body>
-  <div>Teachable Machine Image Model (Mobile) with MQTT</div>
-  <button type="button" onclick="init('environment')">Start (Back Camera)</button>
-  <button type="button" onclick="init('user')">Start (Front Camera)</button>
-  <button type="button" onclick="stop()">Stop</button>
-  <div id="webcam-container"></div>
-  <div id="label-container"></div>
+<script type="text/javascript">
+  const URL = "https://teachablemachine.withgoogle.com/models/BIbJVnndE/"; // Replace with your model URL
+  let model, webcam, labelContainer, maxPredictions;
+  let mqttClient;
+  let messageQueue = [];
+  let lastFrameTime = 0;
+  const frameInterval = 100; // ~10 FPS
+  let isRunning = false; // Flag to prevent race conditions
 
-  <script type="text/javascript">
-    const URL = "https://teachablemachine.withgoogle.com/models/BIbJVnndE/"; // Replace with your model URL
-    let model, webcam, labelContainer, maxPredictions;
-    let mqttClient;
-    let messageQueue = [];
-    let lastFrameTime = 0;
-    const frameInterval = 100; // ~10 FPS
+  // MQTT Configuration
+  const mqttBroker = 'broker.hivemq.com';
+  const mqttPort = 8000; // Non-secure WebSocket port
+  const mqttTopic = `Rat/${clientId}`;
+  const clientId = 'clientId-buiKVcO8tx' + Math.random().toString(16).slice(3);
 
-    // MQTT Configuration
-    const mqttBroker = 'broker.hivemq.com';
-    const mqttPort = 8884; // Changed to non-secure WebSocket port for simplicity (8884 requires SSL)
-    const mqttTopic = `Rat/${clientId}`;
-    const clientId = 'clientId-buiKVcO8tx' + Math.random().toString(16).slice(3);
+  function connectMQTT(attempt = 1, maxAttempts = 3) {
+    mqttClient = new Paho.MQTT.Client(mqttBroker, mqttPort, clientId);
+    mqttClient.onConnectionLost = onConnectionLost;
+    mqttClient.onMessageArrived = onMessageArrived;
 
-    function connectMQTT(attempt = 1, maxAttempts = 3) {
-      mqttClient = new Paho.MQTT.Client(mqttBroker, mqttPort, clientId);
-      mqttClient.onConnectionLost = onConnectionLost;
-      mqttClient.onMessageArrived = onMessageArrived;
-
-      mqttClient.connect({
-        useSSL: false, // Changed to false for testing
-        onSuccess: onConnect,
-        onFailure: (err) => {
-          console.error('MQTT connection failed:', err);
-          labelContainer.innerText = `MQTT Connection Failed: ${err.errorMessage}. Retrying...`;
-          if (attempt < maxAttempts) {
-            console.log(`Retrying MQTT connection (${attempt + 1}/${maxAttempts})...`);
-            setTimeout(() => connectMQTT(attempt + 1, maxAttempts), 2000);
-          }
+    mqttClient.connect({
+      useSSL: false,
+      onSuccess: onConnect,
+      onFailure: (err) => {
+        console.error('MQTT connection failed:', err);
+        labelContainer.innerText = `MQTT Connection Failed: ${err.errorMessage}. Retrying...`;
+        if (attempt < maxAttempts) {
+          console.log(`Retrying MQTT connection (${attempt + 1}/${maxAttempts})...`);
+          setTimeout(() => connectMQTT(attempt + 1, maxAttempts), 2000);
         }
-      });
+      }
+    });
+  }
+
+  function onConnect() {
+    console.log('Connected to MQTT broker');
+    labelContainer.innerText = "Connected to MQTT broker";
+    while (messageQueue.length > 0) {
+      const message = messageQueue.shift();
+      mqttClient.send(message);
+      console.log('Sent queued MQTT message:', message.payloadString);
+    }
+  }
+
+  function onConnectionLost(responseObject) {
+    if (responseObject.errorCode !== 0) {
+      console.error('MQTT connection lost:', responseObject.errorMessage);
+      labelContainer.innerText = `MQTT Connection Lost: ${responseObject.errorMessage}`;
+    }
+  }
+
+  function onMessageArrived(message) {
+    console.log('MQTT message received:', message.payloadString);
+  }
+
+  async function init(facingMode) {
+    // Prevent multiple initializations
+    if (isRunning) {
+      console.log("Already running, please stop first.");
+      return;
+    }
+    isRunning = true;
+
+    labelContainer = document.getElementById("label-container");
+    labelContainer.innerText = "Initializing...";
+
+    // Check for getUserMedia support
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      labelContainer.innerText = "Error: Webcam not supported by this browser.";
+      isRunning = false;
+      return;
     }
 
-    function onConnect() {
-      console.log('Connected to MQTT broker');
-      labelContainer.innerText = "Connected to MQTT broker";
-      while (messageQueue.length > 0) {
-        const message = messageQueue.shift();
-        mqttClient.send(message);
-        console.log('Sent queued MQTT message:', message.payloadString);
-      }
+    const modelURL = URL + "model.json";
+    const metadataURL = URL + "metadata.json";
+
+    // Load the model
+    try {
+      labelContainer.innerText = "Loading model...";
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
+      console.log("Model loaded successfully, classes:", maxPredictions);
+    } catch (e) {
+      console.error("Model loading failed:", e);
+      labelContainer.innerText = `Error: Failed to load model. Ensure the URL (${URL}) is correct and accessible.`;
+      isRunning = false;
+      return;
     }
 
-    function onConnectionLost(responseObject) {
-      if (responseObject.errorCode !== 0) {
-        console.error('MQTT connection lost:', responseObject.errorMessage);
-        labelContainer.innerText = `MQTT Connection Lost: ${responseObject.errorMessage}`;
+    // Initialize webcam
+    try {
+      labelContainer.innerText = "Setting up webcam...";
+      const scale = window.devicePixelRatio || 1;
+      webcam = new tmImage.Webcam(224 * scale, 224 * scale, false);
+      await webcam.setup({ facingMode: facingMode });
+      await webcam.play();
+      if (!webcam.canvas) {
+        throw new Error("Webcam canvas not initialized");
       }
+      console.log("Webcam initialized, width:", webcam.canvas.width, "facingMode:", facingMode);
+      webcam.canvas.style.width = "224px";
+      webcam.canvas.style.height = "224px";
+      document.getElementById("webcam-container").appendChild(webcam.canvas);
+    } catch (e) {
+      console.error("Webcam setup failed:", e);
+      let errorMessage = e.message;
+      if (e.name === "NotAllowedError") {
+        errorMessage = "Camera access denied. Please allow camera permissions.";
+      } else if (e.name === "NotFoundError") {
+        errorMessage = "No camera found. Please ensure a camera is available.";
+      } else if (e.message.includes("Requested device not found")) {
+        errorMessage = "Requested camera not found. Try switching to another camera.";
+      }
+      labelContainer.innerText = `Error: ${errorMessage}`;
+      isRunning = false;
+      return;
     }
 
-    function onMessageArrived(message) {
-      console.log('MQTT message received:', message.payloadString);
-    }
-
-    async function init(facingMode) {
-      labelContainer = document.getElementById("label-container");
-      labelContainer.innerText = "Initializing...";
-
-      // Check for getUserMedia support
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        labelContainer.innerText = "Error: Webcam not supported by this browser.";
-        return;
-      }
-
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
-
-      // Load the model
-      try {
-        labelContainer.innerText = "Loading model...";
-        model = await tmImage.load(modelURL, metadataURL);
-        maxPredictions = model.getTotalClasses();
-        console.log("Model loaded successfully, classes:", maxPredictions);
-      } catch (e) {
-        console.error("Model loading failed:", e);
-        labelContainer.innerText = `Error: Failed to load model. Ensure the URL (${URL}) is correct and accessible.`;
-        return;
-      }
-
-      // Initialize webcam
-      try {
-        labelContainer.innerText = "Setting up webcam...";
-        const scale = window.devicePixelRatio || 1;
-        webcam = new tmImage.Webcam(224 * scale, 224 * scale, false);
-        await webcam.setup({ facingMode: facingMode });
-        await webcam.play();
-        if (!webcam.canvas) {
-          throw new Error("Webcam canvas not initialized");
-        }
-        console.log("Webcam initialized, width:", webcam.canvas.width, "facingMode:", facingMode);
-        webcam.canvas.style.width = "224px";
-        webcam.canvas.style.height = "224px";
-        document.getElementById("webcam-container").appendChild(webcam.canvas);
-      } catch (e) {
-        console.error("Webcam setup failed:", e);
-        let errorMessage = e.message;
-        if (e.name === "NotAllowedError") {
-          errorMessage = "Camera access denied. Please allow camera permissions.";
-        } else if (e.name === "NotFoundError") {
-          errorMessage = "No camera found. Please ensure a camera is available.";
-        } else if (e.message.includes("Requested device not found")) {
-          errorMessage = "Requested camera not found. Try switching to another camera.";
-        }
-        labelContainer.innerText = `Error: ${errorMessage}`;
-        return;
-      }
-
-      // Connect to MQTT
-      try {
-        labelContainer.innerText = "Connecting to MQTT...";
-        connectMQTT();
-      } catch (e) {
-        console.error("MQTT setup failed:", e);
-        labelContainer.innerText = `Warning: MQTT connection failed, but continuing with predictions.`;
-      }
-
-      // Set up label container
+    // Set up label container
+    try {
       labelContainer.innerHTML = "";
       for (let i = 0; i < maxPredictions; i++) {
-        labelContainer.appendChild(document.createElement("div"));
+        const div = document.createElement("div");
+        div.id = `prediction-${i}`; // Assign unique IDs for safety
+        labelContainer.appendChild(div);
       }
-
-      // Start prediction loop
-      labelContainer.innerText = "Starting predictions...";
-      window.requestAnimationFrame(loop);
+      console.log("Label container initialized with", maxPredictions, "divs");
+    } catch (e) {
+      console.error("Label container setup failed:", e);
+      labelContainer.innerText = `Error: Failed to set up label container.`;
+      isRunning = false;
+      return;
     }
 
-    async function loop(timestamp) {
-      if (!webcam) return; // Stop loop if webcam is null
-      if (timestamp - lastFrameTime < frameInterval) {
-        window.requestAnimationFrame(loop);
+    // Connect to MQTT
+    try {
+      labelContainer.innerText = "Connecting to MQTT...";
+      connectMQTT();
+    } catch (e) {
+      console.error("MQTT setup failed:", e);
+      labelContainer.innerText = `Warning: MQTT connection failed, but continuing with predictions.`;
+    }
+
+    // Start prediction loop
+    labelContainer.innerText = "Starting predictions...";
+    window.requestAnimationFrame(loop);
+  }
+
+  async function loop(timestamp) {
+    if (!isRunning || !webcam) return; // Stop loop if not running or webcam is null
+    if (timestamp - lastFrameTime < frameInterval) {
+      window.requestAnimationFrame(loop);
+      return;
+    }
+    lastFrameTime = timestamp;
+    try {
+      await webcam.update();
+      await predict();
+    } catch (e) {
+      console.error("Prediction error:", e);
+      labelContainer.innerText = `Error during prediction: ${e.message}`;
+    }
+    window.requestAnimationFrame(loop);
+  }
+
+  async function predict() {
+    if (!isRunning || !model || !webcam || !labelContainer) {
+      console.warn("Prediction skipped: System not fully initialized");
+      return;
+    }
+
+    try {
+      const prediction = await model.predict(webcam.canvas);
+      const predictionData = [];
+
+      // Ensure child nodes exist
+      if (labelContainer.childNodes.length < maxPredictions) {
+        console.warn("Label container has fewer nodes than expected:", labelContainer.childNodes.length, "<", maxPredictions);
+        labelContainer.innerText = "Error: Label container not properly initialized.";
         return;
       }
-      lastFrameTime = timestamp;
-      try {
-        await webcam.update();
-        await predict();
-      } catch (e) {
-        console.error("Prediction error:", e);
-        labelContainer.innerText = `Error during prediction: ${e.message}`;
-      }
-      window.requestAnimationFrame(loop);
-    }
 
-    async function predict() {
-      try {
-        const prediction = await model.predict(webcam.canvas);
-        const predictionData = [];
-        for (let i = 0; i < maxPredictions; i++) {
-          const classPrediction = `${prediction[i].className}: ${prediction[i].probability.toFixed(2)}`;
-          labelContainer.childNodes[i].innerHTML = classPrediction;
-          predictionData.push({
-            className: prediction[i].className,
-            probability: prediction[i].probability.toFixed(2)
-          });
+      for (let i = 0; i < maxPredictions; i++) {
+        if (!labelContainer.childNodes[i]) {
+          console.warn(`Child node ${i} is undefined`);
+          continue; // Skip if child node is undefined
         }
-
-        // Send or queue predictions
-        const message = new Paho.MQTT.Message(JSON.stringify(predictionData));
-        message.destinationName = mqttTopic;
-        if (mqttClient && mqttClient.isConnected()) {
-          mqttClient.send(message);
-          console.log('Sent MQTT message:', JSON.stringify(predictionData));
-        } else {
-          messageQueue.push(message);
-          console.log('Queued MQTT message:', JSON.stringify(predictionData));
-        }
-      } catch (e) {
-        console.error("Prediction failed:", e);
-        labelContainer.innerText = `Error in prediction: ${e.message}`;
+        const classPrediction = `${prediction[i].className}: ${prediction[i].probability.toFixed(2)}`;
+        labelContainer.childNodes[i].innerHTML = classPrediction;
+        predictionData.push({
+          className: prediction[i].className,
+          probability: prediction[i].probability.toFixed(2)
+        });
       }
-    }
 
-    function stop() {
-      if (webcam) {
-        webcam.stop();
-        document.getElementById("webcam-container").innerHTML = '';
-        webcam = null;
-      }
+      // Send or queue predictions
+      const message = new Paho.MQTT.Message(JSON.stringify(predictionData));
+      message.destinationName = mqttTopic;
       if (mqttClient && mqttClient.isConnected()) {
-        mqttClient.disconnect();
-        console.log('Disconnected from MQTT broker');
-        mqttClient = null;
+        mqttClient.send(message);
+        console.log('Sent MQTT message:', JSON.stringify(predictionData));
+      } else {
+        messageQueue.push(message);
+        console.log('Queued MQTT message:', JSON.stringify(predictionData));
       }
-      messageQueue = [];
+    } catch (e) {
+      console.error("Prediction failed:", e);
+      labelContainer.innerText = `Error in prediction: ${e.message}`;
+    }
+  }
+
+  function stop() {
+    isRunning = false;
+    if (webcam) {
+      webcam.stop();
+      document.getElementById("webcam-container").innerHTML = '';
+      webcam = null;
+    }
+    if (mqttClient && mqttClient.isConnected()) {
+      mqttClient.disconnect();
+      console.log('Disconnected from MQTT broker');
+      mqttClient = null;
+    }
+    messageQueue = [];
+    if (labelContainer) {
       labelContainer.innerText = "Stopped.";
     }
-  </script>
-</body>
-</html>
-
+  }
+</script>
