@@ -12,6 +12,17 @@
 </head>
 <body>
   <h2>MQTT Dashboard (กดปุ่มแล้วส่งค่า)</h2>
+<button onclick="checkConnection()">เช็คการเชื่อมต่อ</button>
+
+<script>
+  function checkConnection() {
+    if (mqttClient.connected) {
+      alert("✅ MQTT Connected!");
+    } else {
+      alert("❌ MQTT Not Connected!");
+    }
+  }
+</script>
 
   <div id="messages"></div>
   <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ...">
@@ -69,3 +80,4 @@
   </script>
 </body>
 </html>
+
