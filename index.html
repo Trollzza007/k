@@ -24,7 +24,7 @@
     const sendBtn = document.getElementById('sendBtn');
 
     // 1. เชื่อมต่อ HiveMQ Broker ผ่าน WebSocket
-    const client = mqtt.connect('wss://broker.hivemq.com:8000/mqtt');
+    const client = mqtt.connect('wss://mqtt-dashboard.com:8884/mqtt');
 
     client.on('connect', () => {
       console.log('เชื่อมต่อสำเร็จ!');
@@ -64,6 +64,7 @@
   </script>
 </body>
 </html>
+
 
 
 
