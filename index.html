@@ -32,17 +32,15 @@
     const MQTT_TOPIC = "melon";
 
     const mqttClient = mqtt.connect(MQTT_BROKER, {
-      clientId: "clientId-KY7lrLcsmm" 
+      clientId: "clientId-KY7lrLcsmm-" + Math.random().toString(16).substr(2, 5)
     });
 
     mqttClient.on("connect", function () {
-      <div>True</div>
       console.log("✅ Connected to HiveMQ Broker");
       mqttClient.subscribe(MQTT_TOPIC);
     });
 
     mqttClient.on("error", function(err){
-      <div>False</div>
       console.error("❌ MQTT Error:", err);
     });
 
@@ -126,6 +124,3 @@
   </script>
 </body>
 </html>
-
-
-
