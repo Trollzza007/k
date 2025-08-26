@@ -3,8 +3,6 @@
 <head>
   <title>MQTT Dashboard Test (Button Send)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
-
-  <!-- โหลด library -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
@@ -15,6 +13,7 @@
     video { max-width: 100%; height: auto; }
     #label-container { margin: 10px; font-size: 1.2em; }
     button { padding: 10px 20px; font-size: 1em; margin: 5px; }
+
   </style>
 </head>
 <body>
@@ -25,19 +24,17 @@
   <div id="webcam-container"></div>
   <div id="label-container"></div>
 
+
   <div id="messages"></div>
   <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ...">
   <button onclick="sendMessage()">ส่งข้อความ</button>
-  <button onclick="sendTest()">ส่ง hello</button> <!-- ปุ่มใหม่ -->
 
-  <!-- โค้ดหลัก -->
   <script type="text/javascript">
     const messagesDiv = document.getElementById('messages');
     const input = document.getElementById('msgInput');
     const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
     let model, webcam, labelContainer, maxPredictions;
     let lastMessage = "";
-
     // ----------------- MQTT -----------------
     const MQTT_BROKER = "wss://mqtt-dashboard.com:8884/mqtt"; 
     const MQTT_TOPIC = "melon";
@@ -63,8 +60,7 @@
     mqttClient.on("error", function(err){
       append("❌ MQTT Error: " + err.message);
     });
-
-    // ----------------- Teachable Machine -----------------
+// ----------------- Teachable Machine -----------------
     async function init(facingMode) {
       const modelURL = URL + "model.json";
       const metadataURL = URL + "metadata.json";
@@ -95,9 +91,9 @@
       for (let i = 0; i < maxPredictions; i++) {
         labelContainer.appendChild(document.createElement("div"));
       }
-    }
 
-    async function loop() {
+    }
+async function loop() {
       webcam.update();
       await predict();
       window.requestAnimationFrame(loop);
@@ -118,8 +114,7 @@
         if (className === "cat") catProb = prob;
       }
     }
-
-    function sendToMQTT() {
+function sendToMQTT() {
       let message = "";
 
       if (catProb > 0.85) message = "cat";
@@ -139,6 +134,9 @@
       }
     }
 
+
+
+    
     // ----------------- ฟังก์ชันส่งข้อความ -----------------
     function sendMessage() {
       const message = input.value.trim();
@@ -148,16 +146,6 @@
         input.value = "";
       } else {
         append("⚠️ ไม่ได้เชื่อมต่อ หรือข้อความว่าง");
-      }
-    }
-
-    // ปุ่มทดสอบส่ง hello
-    function sendTest() {
-      if (mqttClient.connected) {
-        mqttClient.publish(MQTT_TOPIC, "hello");
-        append("📤 ส่ง: hello");
-      } else {
-        append("⚠️ ยังไม่ได้เชื่อมต่อ MQTT");
       }
     }
 
@@ -171,3 +159,9 @@
   </script>
 </body>
 </html>
+
+
+
+
+
+
