@@ -14,7 +14,13 @@
   </style>
 </head>
 <body>
-  <h2>MQTT Dashboard (กดปุ่มแล้วส่งค่า)</h2>
+  <div>Teachable Machine Image Model + MQTT (HiveMQ)</div>
+  <button type="button" onclick="init('environment')">Start (Back Camera)</button>
+  <button type="button" onclick="init('user')">Start (Front Camera)</button>
+  <button type="button" onclick="stop()">Stop</button>
+  <div id="webcam-container"></div>
+  <div id="label-container"></div>
+
 
   <div id="messages"></div>
   <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ...">
@@ -49,7 +55,39 @@
     mqttClient.on("error", function(err){
       append("❌ MQTT Error: " + err.message);
     });
+// ----------------- Teachable Machine -----------------
+    async function init(facingMode) {
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
 
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
+
+      webcam = new tmImage.Webcam(224, 224, facingMode === 'user');
+
+      try {
+        await webcam.setup({ facingMode: facingMode });
+        await webcam.play();
+
+        const container = document.getElementById("webcam-container");
+        container.innerHTML = ""; 
+        if (webcam.canvas) container.appendChild(webcam.canvas);
+        else throw new Error("Webcam canvas not initialized");
+
+        window.requestAnimationFrame(loop);
+      } catch (e) {
+        console.error("Webcam setup failed:", e);
+        document.getElementById("label-container").innerText = "Error: " + e.message;
+        return;
+      }
+
+      labelContainer = document.getElementById("label-container");
+      labelContainer.innerHTML = "";
+      for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.appendChild(document.createElement("div"));
+      }
+
+    }
     // ----------------- ฟังก์ชันส่งข้อความ -----------------
     function sendMessage() {
       const message = input.value.trim();
@@ -72,4 +110,5 @@
   </script>
 </body>
 </html>
+
 
