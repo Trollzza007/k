@@ -88,6 +88,32 @@
       }
 
     }
+async function loop() {
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
+
+    let dogProb = 0, catProb = 0;
+
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+
+      for (let i = 0; i < maxPredictions; i++) {
+        const className = prediction[i].className.toLowerCase();
+        const prob = parseFloat(prediction[i].probability.toFixed(2));
+
+        labelContainer.childNodes[i].innerHTML = className + ": " + prob;
+
+        if (className === "dog") dogProb = prob;
+        if (className === "cat") catProb = prob;
+      }
+    }
+
+
+
+
+    
     // ----------------- ฟังก์ชันส่งข้อความ -----------------
     function sendMessage() {
       const message = input.value.trim();
@@ -110,5 +136,6 @@
   </script>
 </body>
 </html>
+
 
 
