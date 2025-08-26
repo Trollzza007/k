@@ -15,7 +15,7 @@
   </style>
 </head>
 <body>
-  <div>Teachable Machine Image Model + MQTT (HiveMQ)</div>
+  <div>Teachable Machine Image Model + MQTT (mqtt-dashboard.com)</div>
   <button type="button" onclick="init('environment')">Start (Back Camera)</button>
   <button type="button" onclick="init('user')">Start (Front Camera)</button>
   <button type="button" onclick="stop()">Stop</button>
@@ -28,21 +28,29 @@
     let lastMessage = "";
 
     // ----------------- MQTT -----------------
-    const MQTT_BROKER = "wss://mqtt-dashboard.com:8884/mqtt"; 
+    const MQTT_BROKER = "wss://mqtt-dashboard.com:8884/";   // 🔹 เอา /mqtt ออก
     const MQTT_TOPIC = "melon";
 
     const mqttClient = mqtt.connect(MQTT_BROKER, {
-      clientId: "clientId-" + Math.random().toString(16).substr(2, 5)
+      clientId: "clientId-" + Math.random().toString(16).substr(2, 5),
+      protocolVersion: 4,  // MQTT v3.1.1
+      clean: true,
+      reconnectPeriod: 2000
     });
 
     mqttClient.on("connect", function () {
-      appendMessage("✅ เชื่อมต่อสำเร็จ (clientId: " + clientId + ")");
-      console.log("✅ Connected to HiveMQ Broker");
-      mqttClient.subscribe(MQTT_TOPIC);
+      console.log("✅ Connected to mqtt-dashboard.com");
+      mqttClient.subscribe(MQTT_TOPIC, function(err){
+        if(!err) console.log("📡 Subscribed to", MQTT_TOPIC);
+      });
     });
 
     mqttClient.on("error", function(err){
       console.error("❌ MQTT Error:", err);
+    });
+
+    mqttClient.on("message", function(topic, msg){
+      console.log("📥 Received:", topic, msg.toString());
     });
 
     // ----------------- Teachable Machine -----------------
@@ -125,4 +133,5 @@
   </script>
 </body>
 </html>
+
 
