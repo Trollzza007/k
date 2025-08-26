@@ -8,9 +8,12 @@
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; }
-    #messages { border:1px solid #ccc; height:200px; overflow-y:auto; margin-bottom:10px; padding:5px; text-align:left; }
-    input, button { padding: 10px; font-size: 1em; margin: 5px; }
+     body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; }
+    #webcam-container { max-width: 100%; margin: 10px auto; }
+    video { max-width: 100%; height: auto; }
+    #label-container { margin: 10px; font-size: 1.2em; }
+    button { padding: 10px 20px; font-size: 1em; margin: 5px; }
+
   </style>
 </head>
 <body>
@@ -154,6 +157,7 @@ function sendToMQTT() {
   </script>
 </body>
 </html>
+
 
 
 
