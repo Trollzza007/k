@@ -32,7 +32,9 @@
   <script>
     const messagesDiv = document.getElementById('messages');
     const input = document.getElementById('msgInput');
-
+    const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
+    let model, webcam, labelContainer, maxPredictions;
+    let lastMessage = "";
     // ----------------- MQTT -----------------
     const MQTT_BROKER = "wss://mqtt-dashboard.com:8884/mqtt"; 
     const MQTT_TOPIC = "melon";
@@ -157,6 +159,7 @@ function sendToMQTT() {
   </script>
 </body>
 </html>
+
 
 
 
