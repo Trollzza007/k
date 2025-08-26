@@ -20,20 +20,22 @@
     const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
     const MQTT_TOPIC = "melon";   // ✅ ใช้ topic ของคุณ
 
-    // ใส่ clientId (สุ่มเล็กน้อยกันชนกัน)
     const mqttClient = mqtt.connect(MQTT_BROKER, {
-      clientId: "clientId-KY7lrLcsmm" + Math.random().toString(16).substr(2, 5)
+      clientId: "clientId-KY7lrLcsmm-" + Math.random().toString(16).substr(2, 5)
     });
 
     mqttClient.on("connect", function () {
       console.log("✅ Connected to HiveMQ Broker");
-    mqttClient.subscribe(MQTT_TOPIC);
+      mqttClient.subscribe(MQTT_TOPIC);
     });
 
     mqttClient.on("message", function (topic, message) {
       console.log("📥 Received:", message.toString());
     });
 
+    mqttClient.on("error", function(err){
+      console.error("❌ MQTT Error:", err);
+    });
 
     // ----------------- Teachable Machine -----------------
     const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
@@ -47,10 +49,22 @@
       model = await tmImage.load(modelURL, metadataURL);
       maxPredictions = model.getTotalClasses();
 
-      webcam = new tmImage.Webcam(224, 224, false);
+      // ✅ flip = true ถ้าใช้กล้องหน้า
+      webcam = new tmImage.Webcam(224, 224, facingMode === 'user');
+
       try {
         await webcam.setup({ facingMode: facingMode });
         await webcam.play();
+
+        // ✅ ล้าง container ก่อน append
+        const container = document.getElementById("webcam-container");
+        container.innerHTML = "";
+        if (webcam.canvas) {
+          container.appendChild(webcam.canvas);
+        } else {
+          throw new Error("Webcam canvas not initialized");
+        }
+
         window.requestAnimationFrame(loop);
       } catch (e) {
         console.error("Webcam setup failed:", e);
@@ -58,14 +72,13 @@
         return;
       }
 
-      document.getElementById("webcam-container").appendChild(webcam.canvas);
       labelContainer = document.getElementById("label-container");
       labelContainer.innerHTML = "";
       for (let i = 0; i < maxPredictions; i++) {
         labelContainer.appendChild(document.createElement("div"));
       }
 
-      // เริ่มส่งข้อมูลไป MQTT ทุกๆ 2 วินาที
+      // ✅ ส่ง MQTT ทุก 2 วินาที
       setInterval(sendToMQTT, 2000);
     }
 
