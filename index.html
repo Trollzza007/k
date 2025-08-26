@@ -45,7 +45,7 @@
     let lastMessage = "";
 
     // ----------------- MQTT -----------------
-    const MQTT_BROKER = "wss://mqtt-dashboard.com:8884/mqtt"; 
+    const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
     const MQTT_TOPIC = "melon";
 
     const mqttClient = mqtt.connect(MQTT_BROKER, {
@@ -150,5 +150,6 @@
   </script>
 </body>
 </html>
+
 
 
