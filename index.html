@@ -89,9 +89,6 @@ const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
       for (let i = 0; i < maxPredictions; i++) {
         labelContainer.appendChild(document.createElement("div"));
       }
-
-      // ส่ง MQTT ทุก 5 วินาที
-      setInterval(sendToMQTT, 5000);
     }
 
     async function loop() {
@@ -116,25 +113,7 @@ const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
       }
     }
 
-    function sendToMQTT() {
-      let message = "";
-
-      if (catProb > 0.85) message = "cat";
-      else if (dogProb > 0.85) message = "dog";
-
-      if (mqttClient.connected && message !== "") {
-        mqttClient.publish(MQTT_TOPIC, message);
-        console.log("📤 Sent to MQTT:", message);
-      }
-    }
-
-    function stop() {
-      if (webcam) {
-        webcam.stop();
-        document.getElementById("webcam-container").innerHTML = '';
-        document.getElementById("label-container").innerHTML = '';
-      }
-    }
+    
 
     // ----------------- ฟังก์ชันส่งข้อความ -----------------
     function sendMessage() {
@@ -158,4 +137,5 @@ const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
   </script>
 </body>
 </html>
+
 
