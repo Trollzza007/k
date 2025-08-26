@@ -36,6 +36,7 @@
     });
 
     mqttClient.on("connect", function () {
+      appendMessage("✅ เชื่อมต่อสำเร็จ (clientId: " + clientId + ")");
       console.log("✅ Connected to HiveMQ Broker");
       mqttClient.subscribe(MQTT_TOPIC);
     });
@@ -124,3 +125,4 @@
   </script>
 </body>
 </html>
+
