@@ -21,7 +21,17 @@
   <button type="button" onclick="stop()">Stop</button>
   <div id="webcam-container"></div>
   <div id="label-container"></div>
+<button onclick="checkConnection()">เช็คการเชื่อมต่อ</button>
 
+<script>
+  function checkConnection() {
+    if (mqttClient.connected) {
+      alert("✅ MQTT Connected!");
+    } else {
+      alert("❌ MQTT Not Connected!");
+    }
+  }
+</script>
   <script type="text/javascript">
     const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
     let model, webcam, labelContainer, maxPredictions;
@@ -53,14 +63,6 @@
     mqttClient.on("error", function(err){
       append("❌ MQTT Error: " + err.message);
     });
-// ----------------- แสดงข้อความ -----------------
-    function append(text) {
-      const p = document.createElement("p");
-      p.textContent = text;
-      messagesDiv.appendChild(p);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
 
     // ----------------- Teachable Machine -----------------
     async function init(facingMode) {
@@ -142,3 +144,4 @@
   </script>
 </body>
 </html>
+
