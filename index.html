@@ -36,11 +36,13 @@
     });
 
     mqttClient.on("connect", function () {
+      <div>True</div>
       console.log("✅ Connected to HiveMQ Broker");
       mqttClient.subscribe(MQTT_TOPIC);
     });
 
     mqttClient.on("error", function(err){
+      <div>False</div>
       console.error("❌ MQTT Error:", err);
     });
 
@@ -124,4 +126,5 @@
   </script>
 </body>
 </html>
+
 
