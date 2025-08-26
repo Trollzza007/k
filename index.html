@@ -34,7 +34,7 @@
     const input = document.getElementById('msgInput');
 
     // ---------------- MQTT ----------------
-    const MQTT_BROKER = "wss://mqtt-dashboard.com:8884/mqtt"; // ใช้ HiveMQ public broker
+    const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; // ใช้ HiveMQ public broker
     const MQTT_TOPIC = "melon";
 
     const mqttClient = mqtt.connect(MQTT_BROKER, {
@@ -158,5 +158,6 @@
 
 </body>
 </html>
+
 
 
