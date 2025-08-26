@@ -25,7 +25,7 @@
   <script type="text/javascript">
     const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
     let model, webcam, labelContainer, maxPredictions;
-    let lastPredictionText = "";
+    let lastMessage = "";
 
     // ----------------- MQTT -----------------
     const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
@@ -38,10 +38,6 @@
     mqttClient.on("connect", function () {
       console.log("✅ Connected to HiveMQ Broker");
       mqttClient.subscribe(MQTT_TOPIC);
-    });
-
-    mqttClient.on("message", function (topic, message) {
-      console.log("📥 Received:", message.toString());
     });
 
     mqttClient.on("error", function(err){
@@ -64,11 +60,8 @@
 
         const container = document.getElementById("webcam-container");
         container.innerHTML = ""; 
-        if (webcam.canvas) {
-          container.appendChild(webcam.canvas);
-        } else {
-          throw new Error("Webcam canvas not initialized");
-        }
+        if (webcam.canvas) container.appendChild(webcam.canvas);
+        else throw new Error("Webcam canvas not initialized");
 
         window.requestAnimationFrame(loop);
       } catch (e) {
@@ -83,7 +76,7 @@
         labelContainer.appendChild(document.createElement("div"));
       }
 
-      // ส่งข้อมูลเป็นข้อความทุก 5 วินาที
+      // ส่ง MQTT ทุก 5 วินาที
       setInterval(sendToMQTT, 5000);
     }
 
@@ -93,25 +86,31 @@
       window.requestAnimationFrame(loop);
     }
 
+    let dogProb = 0, catProb = 0;
+
     async function predict() {
       const prediction = await model.predict(webcam.canvas);
-      let texts = [];
 
       for (let i = 0; i < maxPredictions; i++) {
-        const className = prediction[i].className;
-        const prob = prediction[i].probability.toFixed(2);
+        const className = prediction[i].className.toLowerCase();
+        const prob = parseFloat(prediction[i].probability.toFixed(2));
 
         labelContainer.childNodes[i].innerHTML = className + ": " + prob;
-        texts.push(className + ": " + prob);
-      }
 
-      lastPredictionText = texts.join(", ");
+        if (className === "dog") dogProb = prob;
+        if (className === "cat") catProb = prob;
+      }
     }
 
     function sendToMQTT() {
-      if (mqttClient.connected && lastPredictionText !== "") {
-        mqttClient.publish(MQTT_TOPIC, lastPredictionText);
-        console.log("📤 Sent to MQTT:", lastPredictionText);
+      let message = "";
+
+      if (catProb > 0.85) message = "cat";
+      else if (dogProb > 0.85) message = "dog";
+
+      if (mqttClient.connected && message !== "") {
+        mqttClient.publish(MQTT_TOPIC, message);
+        console.log("📤 Sent to MQTT:", message);
       }
     }
 
