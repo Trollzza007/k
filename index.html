@@ -1,65 +1,53 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Teachable Machine + MQTT (Button Send)</title>
+  <title>MQTT Dashboard Test (Button Send)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 10px; }
-    #webcam-container { max-width: 100%; margin: 10px auto; }
-    video { max-width: 100%; height: auto; }
-    #label-container { margin: 10px; font-size: 1.2em; }
-    #messages { border:1px solid #ccc; height:150px; overflow-y:auto; margin-bottom:10px; padding:5px; text-align:left; }
-    button, input { padding: 10px 15px; font-size: 1em; margin: 5px; }
+    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; }
+    #messages { border:1px solid #ccc; height:200px; overflow-y:auto; margin-bottom:10px; padding:5px; text-align:left; }
+    input, button { padding: 10px; font-size: 1em; margin: 5px; }
   </style>
 </head>
 <body>
-  <h2>Teachable Machine + MQTT (Button Send)</h2>
+  <h2>MQTT Dashboard (กดปุ่มแล้วส่งค่า)</h2>
 
-  <button onclick="init('environment')">Start Back Camera</button>
-  <button onclick="init('user')">Start Front Camera</button>
-  <button onclick="stop()">Stop Camera</button>
-  <div id="webcam-container"></div>
-  <div id="label-container"></div>
-
-  <hr>
-  <button onclick="checkConnection()">เช็คการเชื่อมต่อ</button>
+  <div id="messages"></div>
   <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ...">
   <button onclick="sendMessage()">ส่งข้อความ</button>
-  <div id="messages"></div>
 
   <script>
     const messagesDiv = document.getElementById('messages');
     const input = document.getElementById('msgInput');
 
-    // ---------------- MQTT ----------------
-    const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; // ใช้ HiveMQ public broker
+    // ----------------- MQTT -----------------
+    const MQTT_BROKER = "wss://mqtt-dashboard.com:8884/mqtt"; 
     const MQTT_TOPIC = "melon";
 
     const mqttClient = mqtt.connect(MQTT_BROKER, {
-      clientId: "webClient_" + Math.random().toString(16).substr(2, 8),
+      clientId: "clientId-" + Math.random().toString(16).substr(2, 5),
       protocolVersion: 4,
       clean: true,
       reconnectPeriod: 2000
     });
 
-    mqttClient.on("connect", () => {
-      append("✅ Connected to MQTT broker");
-      mqttClient.subscribe(MQTT_TOPIC, err => {
-        if (!err) append("📡 Subscribed to topic: " + MQTT_TOPIC);
+    mqttClient.on("connect", function () {
+      append("✅ Connected to mqtt-dashboard.com");
+      mqttClient.subscribe(MQTT_TOPIC, function(err){
+        if(!err) append("📡 Subscribed to " + MQTT_TOPIC);
       });
     });
 
-    mqttClient.on("message", (topic, msg) => {
+    mqttClient.on("message", function(topic, msg){
       append("📥 " + topic + ": " + msg.toString());
     });
 
-    mqttClient.on("error", err => {
+    mqttClient.on("error", function(err){
       append("❌ MQTT Error: " + err.message);
     });
 
-    // ---------------- MQTT Functions ----------------
+    // ----------------- ฟังก์ชันส่งข้อความ -----------------
     function sendMessage() {
       const message = input.value.trim();
       if (mqttClient.connected && message !== "") {
@@ -71,93 +59,13 @@
       }
     }
 
-    function checkConnection() {
-      if (mqttClient.connected) alert("✅ MQTT Connected!");
-      else alert("❌ MQTT Not Connected!");
-    }
-
+    // ----------------- แสดงข้อความ -----------------
     function append(text) {
       const p = document.createElement("p");
       p.textContent = text;
       messagesDiv.appendChild(p);
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
-
-    // ---------------- Teachable Machine ----------------
-    const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
-    let model, webcam, labelContainer, maxPredictions;
-    let dogProb = 0, catProb = 0;
-
-    async function init(facingMode) {
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
-
-      model = await tmImage.load(modelURL, metadataURL);
-      maxPredictions = model.getTotalClasses();
-
-      webcam = new tmImage.Webcam(224, 224, facingMode === 'user');
-
-      try {
-        await webcam.setup({ facingMode: facingMode });
-        await webcam.play();
-
-        const container = document.getElementById("webcam-container");
-        container.innerHTML = "";
-        container.appendChild(webcam.canvas);
-
-        window.requestAnimationFrame(loop);
-      } catch (e) {
-        console.error("Webcam setup failed:", e);
-        document.getElementById("label-container").innerText = "Error: " + e.message;
-        return;
-      }
-
-      labelContainer = document.getElementById("label-container");
-      labelContainer.innerHTML = "";
-      for (let i = 0; i < maxPredictions; i++) {
-        labelContainer.appendChild(document.createElement("div"));
-      }
-    }
-
-    async function loop() {
-      webcam.update();
-      await predict();
-      window.requestAnimationFrame(loop);
-    }
-
-    async function predict() {
-      const prediction = await model.predict(webcam.canvas);
-
-      for (let i = 0; i < maxPredictions; i++) {
-        const className = prediction[i].className.toLowerCase();
-        const prob = parseFloat(prediction[i].probability.toFixed(2));
-
-        labelContainer.childNodes[i].innerHTML = className + ": " + prob;
-
-        if (className === "dog") dogProb = prob;
-        if (className === "cat") catProb = prob;
-      }
-    }
-
-    // ---------------- Send Prediction manually ----------------
-    function sendPrediction() {
-      let message = "";
-      if (catProb > 0.85) message = "cat";
-      else if (dogProb > 0.85) message = "dog";
-
-      if (mqttClient.connected && message !== "") {
-        mqttClient.publish(MQTT_TOPIC, message);
-        append("📤 Sent Prediction: " + message);
-      } else {
-        append("⚠️ ไม่ได้เชื่อมต่อ หรือไม่มี prediction ที่ส่ง");
-      }
-    }
   </script>
-
-  <button onclick="sendPrediction()">ส่ง Prediction ปัจจุบัน</button>
-
 </body>
 </html>
-
-
-
