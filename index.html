@@ -2,19 +2,12 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <title>MQTT HiveMQ Chat Example</title>
+  <title>MQTT Dashboard Test</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    #messages { border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: auto; margin-bottom: 10px; }
-    #msgInput { width: 70%; padding: 5px; }
-    #sendBtn { padding: 5px 10px; }
-  </style>
 </head>
 <body>
-  <h1>MQTT HiveMQ Chat</h1>
-  
-  <div id="messages"></div>
+  <h2>MQTT Dashboard (wss://mqtt-dashboard.com:8884)</h2>
+  <div id="messages" style="border:1px solid #ccc; height:200px; overflow-y:auto; margin-bottom:10px; padding:5px;"></div>
   <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ...">
   <button id="sendBtn">ส่งข้อความ</button>
 
@@ -23,43 +16,47 @@
     const input = document.getElementById('msgInput');
     const sendBtn = document.getElementById('sendBtn');
 
-    // 1. เชื่อมต่อ HiveMQ Broker ผ่าน WebSocket
-    const client = mqtt.connect('wss://broker.hivemq.com:8000/mqtt');
+    // 👇 ใส่ clientId แบบสุ่ม เพื่อไม่ให้ซ้ำกับ client อื่น
+    const clientId = "webClient_" + Math.random().toString(16).substr(2, 8);
+
+    // 🔹 เชื่อมต่อกับ mqtt-dashboard.com ที่ port 8884 (WSS)
+    const client = mqtt.connect('wss://mqtt-dashboard.com:8884/mqtt', {
+      clientId: clientId,
+      clean: true, // true = ลบ session เก่า
+      reconnectPeriod: 1000
+    });
 
     client.on('connect', () => {
-      console.log('เชื่อมต่อสำเร็จ!');
-      appendMessage('ระบบ: เชื่อมต่อ HiveMQ สำเร็จ!');
-      // Subscribe topic
-      client.subscribe('chat/test', (err) => {
-        if (!err) appendMessage('ระบบ: สมัคร topic chat/test เรียบร้อย');
+      appendMessage("✅ เชื่อมต่อสำเร็จ (clientId: " + clientId + ")");
+      client.subscribe("chat/test", (err) => {
+        if (!err) {
+          appendMessage("📡 Subscribed to topic: chat/test");
+        }
       });
     });
 
     client.on('message', (topic, message) => {
-      appendMessage('คนอื่น: ' + message.toString());
+      appendMessage("📥 " + topic + ": " + message.toString());
     });
 
     client.on('error', (err) => {
-      console.error('เกิดข้อผิดพลาด:', err);
-      appendMessage('ระบบ: เกิดข้อผิดพลาด');
+      appendMessage("❌ Error: " + err.message);
     });
 
-    // ส่งข้อความ
     sendBtn.addEventListener('click', () => {
       const msg = input.value.trim();
-      if(msg !== '') {
-        client.publish('chat/test', msg);
-        appendMessage('คุณ: ' + msg);
-        input.value = '';
+      if (msg !== "") {
+        client.publish("chat/test", msg);
+        appendMessage("📤 คุณ: " + msg);
+        input.value = "";
       }
     });
 
-    // ฟังก์ชันเพิ่มข้อความลงใน div
     function appendMessage(text) {
-      const p = document.createElement('p');
+      const p = document.createElement("p");
       p.textContent = text;
       messagesDiv.appendChild(p);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight; // เลื่อนลงอัตโนมัติ
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
   </script>
 </body>
