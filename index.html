@@ -25,9 +25,9 @@
   <script type="text/javascript">
     const URL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/";
     let model, webcam, labelContainer, maxPredictions;
-    let dogProb = 0, catProb = 0;
+    let lastPredictionText = "";
 
-    // ----------------- ตั้งค่า MQTT -----------------
+    // ----------------- MQTT -----------------
     const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
     const MQTT_TOPIC = "melon";
 
@@ -56,7 +56,6 @@
       model = await tmImage.load(modelURL, metadataURL);
       maxPredictions = model.getTotalClasses();
 
-      // flip = true ถ้าใช้กล้องหน้า
       webcam = new tmImage.Webcam(224, 224, facingMode === 'user');
 
       try {
@@ -64,7 +63,7 @@
         await webcam.play();
 
         const container = document.getElementById("webcam-container");
-        container.innerHTML = ""; // ล้าง container ก่อน append
+        container.innerHTML = ""; 
         if (webcam.canvas) {
           container.appendChild(webcam.canvas);
         } else {
@@ -84,8 +83,8 @@
         labelContainer.appendChild(document.createElement("div"));
       }
 
-      // ส่ง MQTT ทุก 2 วินาที
-      setInterval(sendToMQTT, 2000);
+      // ส่งข้อมูลเป็นข้อความทุก 5 วินาที
+      setInterval(sendToMQTT, 5000);
     }
 
     async function loop() {
@@ -96,30 +95,23 @@
 
     async function predict() {
       const prediction = await model.predict(webcam.canvas);
+      let texts = [];
 
       for (let i = 0; i < maxPredictions; i++) {
         const className = prediction[i].className;
         const prob = prediction[i].probability.toFixed(2);
 
         labelContainer.childNodes[i].innerHTML = className + ": " + prob;
-
-        if (className.toLowerCase() === "dog") {
-          dogProb = parseFloat(prob);
-        }
-        if (className.toLowerCase() === "cat") {
-          catProb = parseFloat(prob);
-        }
+        texts.push(className + ": " + prob);
       }
+
+      lastPredictionText = texts.join(", ");
     }
 
     function sendToMQTT() {
-      if (mqttClient.connected) {
-        const payload = JSON.stringify({
-          dog: dogProb,
-          cat: catProb
-        });
-        mqttClient.publish(MQTT_TOPIC, payload);
-        console.log("📤 Sent to MQTT:", payload);
+      if (mqttClient.connected && lastPredictionText !== "") {
+        mqttClient.publish(MQTT_TOPIC, lastPredictionText);
+        console.log("📤 Sent to MQTT:", lastPredictionText);
       }
     }
 
