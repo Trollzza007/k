@@ -109,7 +109,25 @@ async function loop() {
         if (className === "cat") catProb = prob;
       }
     }
+function sendToMQTT() {
+      let message = "";
 
+      if (catProb > 0.85) message = "cat";
+      else if (dogProb > 0.85) message = "dog";
+
+      if (mqttClient.connected && message !== "") {
+        mqttClient.publish(MQTT_TOPIC, message);
+        console.log("📤 Sent to MQTT:", message);
+      }
+    }
+
+    function stop() {
+      if (webcam) {
+        webcam.stop();
+        document.getElementById("webcam-container").innerHTML = '';
+        document.getElementById("label-container").innerHTML = '';
+      }
+    }
 
 
 
@@ -136,6 +154,7 @@ async function loop() {
   </script>
 </body>
 </html>
+
 
 
 
