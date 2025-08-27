@@ -4,7 +4,7 @@
   <title>MQTT Dashboard Test (Button Send)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; }
@@ -15,19 +15,33 @@
   </style>
 </head>
 <body>
+    
+  <h2>MQTT Dashboard (กดปุ่มแล้วส่งค่า)</h2>
+
+  <div id="messages"></div>
+  <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ...">
+  <button onclick="sendMessage()">ส่งข้อความ</button>
     <div>Teachable Machine Image Model + MQTT (HiveMQ)</div>
   <button type="button" onclick="init('environment')">Start (Back Camera)</button>
   <button type="button" onclick="init('user')">Start (Front Camera)</button>
   <button type="button" onclick="stop()">Stop</button>
   <div id="webcam-container"></div>
   <div id="label-container"></div>
-  <h2>MQTT Dashboard (กดปุ่มแล้วส่งค่า)</h2>
-
-  <div id="messages"></div>
-  <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ...">
-  <button onclick="sendMessage()">ส่งข้อความ</button>
-
   <script>
+
+    
+
+async function loadModel() {
+  try {
+    const model = await tmImage.load(modelURL, metadataURL);
+    console.log('Model loaded successfully');
+  } catch (e) {
+    console.error('Error loading model:', e);
+  }
+}
+
+loadModel();
+
     const messagesDiv = document.getElementById('messages');
     const input = document.getElementById('msgInput');
 
@@ -57,9 +71,29 @@
       append("❌ MQTT Error: " + err.message);
     });
 
-async function init(facingMode) {
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
+    // ----------------- ฟังก์ชันส่งข้อความ -----------------
+    function sendMessage() {
+      const message = input.value.trim();
+      if (mqttClient.connected && message !== "") {
+        mqttClient.publish(MQTT_TOPIC, message);
+        append("📤 คุณ: " + message);
+        input.value = "";
+      } else {
+        append("⚠️ ไม่ได้เชื่อมต่อ หรือข้อความว่าง");
+      }
+    }
+
+    // ----------------- แสดงข้อความ -----------------
+    function append(text) {
+      const p = document.createElement("p");
+      p.textContent = text;
+      messagesDiv.appendChild(p);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    async function init(facingMode) {
+      const modelURL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/model.json";
+const metadataURL = "https://teachablemachine.withgoogle.com/models/6RHE-USRB/metadata.json";
 
       model = await tmImage.load(modelURL, metadataURL);
       maxPredictions = model.getTotalClasses();
@@ -91,13 +125,12 @@ async function init(facingMode) {
       // ส่ง MQTT ทุก 5 วินาที
       setInterval(sendToMQTT, 5000);
     }
-
     async function loop() {
       webcam.update();
       await predict();
       window.requestAnimationFrame(loop);
     }
-    
+
     let dogProb = 0, catProb = 0;
 
     async function predict() {
@@ -114,7 +147,7 @@ async function init(facingMode) {
       }
     }
 
-function sendToMQTT() {
+    function sendToMQTT() {
       let message = "";
 
       if (catProb > 0.85) message = "cat";
@@ -132,26 +165,6 @@ function sendToMQTT() {
         document.getElementById("webcam-container").innerHTML = '';
         document.getElementById("label-container").innerHTML = '';
       }
-    }
-
-    // ----------------- ฟังก์ชันส่งข้อความ -----------------
-    function sendMessage() {
-      const message = input.value.trim();
-      if (mqttClient.connected && message !== "") {
-        mqttClient.publish(MQTT_TOPIC, message);
-        append("📤 คุณ: " + message);
-        input.value = "";
-      } else {
-        append("⚠️ ไม่ได้เชื่อมต่อ หรือข้อความว่าง");
-      }
-    }
-
-    // ----------------- แสดงข้อความ -----------------
-    function append(text) {
-      const p = document.createElement("p");
-      p.textContent = text;
-      messagesDiv.appendChild(p);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
   </script>
 </body>
